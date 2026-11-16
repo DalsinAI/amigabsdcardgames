@@ -108,8 +108,28 @@ def fish():
     return p
 
 
+def backgammon():
+    p = Pic()
+    wood, felt, light, dark = (150, 92, 40, 255), (40, 110, 60, 255), (236, 220, 180, 255), (170, 40, 36, 255)
+    p.box(4, 8, 60, 50, wood)
+    p.rect(7, 11, 57, 47, felt)
+    p.rect(31, 11, 33, 47, wood)
+    for side, x0 in ((0, 8), (1, 34)):
+        for i in range(5):
+            x = x0 + i * 5
+            c = light if i % 2 == 0 else dark
+            p.tri([(x, 11), (x + 4, 11), (x + 2, 26)], c)
+            p.tri([(x, 46), (x + 4, 46), (x + 2, 31)], dark if i % 2 == 0 else light)
+    p.disc(12, 42, 3, (245, 245, 245, 255)); p.disc(48, 15, 3, (30, 30, 34, 255))
+    for (dx, dy, pips) in ((14, 50, ((3, 3), (7, 7))), (36, 48, ((2, 2), (5, 5), (8, 8)))):
+        p.box(dx, dy, dx + 12, dy + 12, WHITE)
+        for (px, py) in pips:
+            p.rect(dx + px, dy + py, dx + px + 2, dy + py + 2, INK)
+    return p
+
+
 if __name__ == "__main__":
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "art")
     out.mkdir(parents=True, exist_ok=True)
-    for name, f in (("cribbage", cribbage), ("millebornes", mille), ("gofish", fish)):
+    for name, f in (("cribbage", cribbage), ("millebornes", mille), ("gofish", fish), ("backgammon", backgammon)):
         f().png(out / f"{name}.png")

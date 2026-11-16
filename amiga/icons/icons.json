@@ -3,14 +3,44 @@
   "drawer": {
     "name": "BSDCardGames",
     "file": "BSDCardGames-drawer.info",
-    "width": 340,
+    "width": 480,
     "height": 120
   },
   "badge": "art/cribbage.png",
   "icons": [
-    {"file": "Cribbage.info", "kind": "tool", "art": "art/cribbage.png", "stack": 32768},
-    {"file": "MilleBornes.info", "kind": "tool", "art": "art/millebornes.png", "stack": 32768},
-    {"file": "GoFish.info", "kind": "tool", "art": "art/gofish.png", "stack": 32768},
-    {"file": "ReadMe.info", "kind": "readme"}
+    {
+      "file": "Cribbage.info",
+      "kind": "tool",
+      "art": "art/cribbage.png",
+      "stack": 32768
+    },
+    {
+      "file": "MilleBornes.info",
+      "kind": "tool",
+      "art": "art/millebornes.png",
+      "stack": 32768
+    },
+    {
+      "file": "GoFish.info",
+      "kind": "tool",
+      "art": "art/gofish.png",
+      "stack": 32768
+    },
+    {
+      "file": "Backgammon.info",
+      "kind": "tool",
+      "art": "art/backgammon.png",
+      "stack": 32768
+    },
+    {
+      "file": "Teachgammon.info",
+      "kind": "tool",
+      "art": "art/backgammon.png",
+      "stack": 32768
+    },
+    {
+      "file": "ReadMe.info",
+      "kind": "readme"
+    }
   ]
 }

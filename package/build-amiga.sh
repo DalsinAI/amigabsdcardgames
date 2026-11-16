@@ -60,7 +60,7 @@ python3 "$ROOT/tools/pack_dist.py" --dist "$DIST" --name "$NAME" --out "$OUT"
 
 # 5. the GFOpenUp part
 sh "$ROOT/package/write-part.sh" "$DIST/$NAME" "$OUT/Parts/$NAME" "$NAME" "$PORT_VERSION" \
-    "BSD card games: Cribbage, Mille Bornes and Go Fish, each in its own console window"
+    "BSD card games: Cribbage, Mille Bornes, Go Fish and Backgammon, each in its own console window"
 echo "part: $(grep -c '^copy' "$OUT/Parts/$NAME/Part") files, $(du -sk "$OUT/Parts/$NAME" | cut -f1) KB"
 ls -l "$DIST/$NAME"
 echo "total: $(( $(date +%s) - t0 )) s"

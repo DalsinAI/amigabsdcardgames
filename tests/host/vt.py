@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Read what amiga/curses.c sent (ANSI: CSI row;col H, CSI J, CSI K, SGR
-0/7, CR, LF, BS, text) and print the 24 x 80 screen it leaves, or check it:
+"""Read what amiga/curses.c (or Backgammon, through amiga/termcap.c) sent
+(ANSI: CSI row;col H, CSI A/B/C/D, CSI J, CSI K, SGR 0/7, CSI 20 h/l, CR,
+LF, BS, text) as the Amiga's console.device reads it: LF also returns the
+carriage until CSI 20 l (and again after CSI 20 h), and LF on the last
+line scrolls, and print the 24 x 80 screen it leaves, or check it:
     vt.py OUTPUT [--want TEXT ...] [--standout TEXT]
 Exits 1 when a wanted text is not on the screen.
 Copyright (c) 2026 AmiCradle Team. BSD-3-Clause, like the games."""
@@ -11,6 +14,7 @@ def screen(data, rows=24, cols=80):
     so = [[False] * cols for _ in range(rows)]
     y = x = 0
     inv = False
+    lnm = True
     i = 0
     while i < len(data):
         c = data[i]
@@ -31,12 +35,24 @@ def screen(data, rows=24, cols=80):
             elif cmd == "K":
                 for k in range(x, cols):
                     s[y][k] = " "; so[y][k] = False
+            elif cmd in "ABCD":
+                n = nums[0] if nums and nums[0] else 1
+                if cmd == "A": y = max(0, y - n)
+                elif cmd == "B": y = min(rows - 1, y + n)
+                elif cmd == "C": x = min(cols - 1, x + n)
+                else: x = max(0, x - n)
+            elif cmd in "hl" and 20 in nums:
+                lnm = cmd == "h"
             elif cmd == "m":
                 inv = 7 in nums
             i += m.end(); continue
         if c == "\r": x = 0
         elif c == "\n":
-            y = min(y + 1, rows - 1)
+            if lnm: x = 0
+            if y == rows - 1:
+                s.pop(0); so.pop(0); s.append([" "] * cols); so.append([False] * cols)
+            else:
+                y += 1
         elif c == "\b": x = max(0, x - 1)
         elif c == "\a": pass
         elif c >= " ":

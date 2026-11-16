@@ -12,7 +12,11 @@
 #  - Mille Bornes draws its board, score card and command list in three
 #    windows; the window toggle (w) and redraw (^L) keep it whole;
 #  - Mille Bornes saves a game through the port's writev (s, a file name);
-#  - Go Fish asks for instructions and deals (stdio, no curses).
+#  - Go Fish asks for instructions and deals (stdio, no curses);
+#  - Backgammon (termcap and tty modes, amiga/termcap.c and amiga/tty.c)
+#    asks its questions, draws the board with the checkers where they
+#    start, and the computer moves; asking for the rules starts
+#    Teachgammon (execl), which shows its first page.
 # Needs a C compiler and python3; skipped without a compiler.
 #   BSD=/path/to/bsd-games (patched) sh tests/host/test_bsd.sh
 # Copyright (c) 2026 AmiCradle Team. BSD-3-Clause, like the games.
@@ -30,8 +34,11 @@ PERM=$($CC -fpermissive -x c -E /dev/null >/dev/null 2>&1 && echo -fpermissive |
 UP="-std=gnu89 $PERM -w -D_XOPEN_SOURCE=500 -D__amigaos__ -include amiga/include/amiga_prelude.h -Iamiga/include -Iamiga"
 MINE="-std=gnu99 -Wall -Werror -D_XOPEN_SOURCE=600 -Iamiga/include -Iamiga"
 for f in curses keys compat; do $CC $MINE -c -o "$T/$f.o" "amiga/$f.c"; done
-$CC $MINE -c -o "$T/fish_start.o" amiga/fish_start.c
+$CC $MINE -DGAME_MAIN=fish_main -DGAME_TITLE='"Go Fish"' -c -o "$T/start_fish.o" amiga/game_start.c
+$CC $MINE -DGAME_MAIN=bg_main -DGAME_TITLE='"Backgammon"' -c -o "$T/start_bg.o" amiga/game_start.c
+$CC $MINE -DGAME_MAIN=teach_main -DGAME_TITLE='"Teachgammon"' -c -o "$T/start_teach.o" amiga/game_start.c
 $CC $MINE -c -o "$T/con.o" tests/host/console_host.c
+for f in tty termcap ospeed; do $CC $MINE -D_DEFAULT_SOURCE -c -o "$T/$f.o" "amiga/$f.c"; done
 PORT="$T/curses.o $T/keys.o $T/compat.o $T/con.o"
 # the games' files where the host run finds them (on the Amiga: PROGDIR:)
 mkdir -p "$T/inc/cribbage" "$T/inc/fish" "$T/Data"
@@ -45,12 +52,27 @@ for f in comp end extern init mille misc move print roll save types varpush; do
     $CC $UP -I"$BSD/mille" -c -o "$T/m_$f.o" "$BSD/mille/$f.c"
 done
 $CC $UP -I"$T/inc/fish" -Dmain=fish_main -c -o "$T/fish.o" "$BSD/fish/fish.c"
+BG="-DAMIGA_TTY_GAME -D_DEFAULT_SOURCE -DV7 -I$BSD/backgammon/common_source -DEXEC_PATH=\"$T/backgammon\" -DTEACH_PATH=\"$T/teachgammon\""
+for f in allow board check fancy init odds one save subs table; do
+    $CC $UP $BG -c -o "$T/bc_$f.o" "$BSD/backgammon/common_source/$f.c"
+done
+for f in extra main move text version; do
+    $CC $UP $BG -Dmain=bg_main -c -o "$T/bg_$f.o" "$BSD/backgammon/backgammon/$f.c"
+done
+for f in data teach ttext1 ttext2 tutor; do
+    $CC $UP $BG -Dmain=teach_main -c -o "$T/bt_$f.o" "$BSD/backgammon/teachgammon/$f.c"
+done
 # shellcheck disable=SC2086
 $CC -o "$T/cribbage" "$T"/c_*.o $PORT
 # shellcheck disable=SC2086
 $CC -o "$T/mille" "$T"/m_*.o $PORT
 # shellcheck disable=SC2086
-$CC -o "$T/fish" "$T/fish.o" "$T/fish_start.o" $PORT
+$CC -o "$T/fish" "$T/fish.o" "$T/start_fish.o" $PORT
+TTY="$T/tty.o $T/termcap.o"
+# shellcheck disable=SC2086
+$CC -o "$T/backgammon" "$T"/bg_*.o "$T"/bc_*.o "$T/start_bg.o" $PORT $TTY
+# shellcheck disable=SC2086
+$CC -o "$T/teachgammon" "$T"/bt_*.o "$T"/bc_*.o "$T/start_teach.o" "$T/ospeed.o" $PORT $TTY
 
 # the keys, through amiga/keys.c alone
 cat > "$T/keys_test.c" <<'C'
@@ -79,9 +101,10 @@ play() {	# game, keys (printf format), output; the game's exit is not checked (i
 }
 want() {	# name, output, texts...
     name=$1; out=$2; shift 2
-    args=""
-    for t in "$@"; do args="$args --want \"$t\""; done
-    if eval python3 "$HERE/vt.py" "$out" $args > "$T/vt.txt"; then
+    n=$#
+    for t in "$@"; do set -- "$@" --want "$t"; done
+    shift "$n"
+    if python3 "$HERE/vt.py" "$out" "$@" > "$T/vt.txt"; then
         echo "ok   $name"
     else
         echo "FAIL $name"; cat "$T/vt.txt"; fails=$((fails + 1))
@@ -112,6 +135,13 @@ if grep -q "Would you like instructions" "$T/fish1.out" && grep -q "Your hand is
 else
     echo "FAIL fish"; cat "$T/fish1.out" | head -20; fails=$((fails + 1))
 fi
+play backgammon 'nnnr' "$T/bg1.out"
+want "backgammon: questions, the board as it starts, a first move" "$T/bg1.out" \
+    "|13  14  15  16  17  18 |   |19  20  21  22  23  24 |" \
+    "|12  11  10   9   8   7 |   | 6   5   4   3   2   1 |" "Player is red, computer is white." "rolls"
+play backgammon 'y' "$T/bg2.out"
+want "backgammon: the rules start Teachgammon" "$T/bg2.out" \
+    "Do you want the rules of the game?  Yes." "how to play Backgammon" "-->"
 
 if [ "$fails" -ne 0 ]; then echo "host tests: $fails failed"; exit 1; fi
 echo "host tests: all passed"

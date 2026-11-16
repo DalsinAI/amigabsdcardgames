@@ -43,7 +43,7 @@ static int raw_now;
 static void console_end(void)
 {
 	if (console) {
-		fputs("\033[0m\233 p", stdout); /* plain text, the cursor shows again */
+		fputs("\033[0m\033[20h\233 p", stdout); /* plain text, LF mode, the cursor shows again */
 		fflush(stdout);
 		if (raw_now) SetMode(console, 0);
 		Close(console); /* stdin, stdout and stderr ("*") close after this */

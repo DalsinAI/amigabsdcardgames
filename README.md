@@ -1,8 +1,8 @@
 # BSD Card Games for GFOS
 
-The AmiCradle Team's port of three card games from bsd-games 2.17
-(NetBSD's games): Cribbage, Mille Bornes and Go Fish, to GFOS: AmigaOS 3.2
-with GFOpenUp, 68040/68060. Each game runs in its own 80 x 24 console
+The AmiCradle Team's port of four games from bsd-games 2.17 (NetBSD's
+games): Cribbage, Mille Bornes, Go Fish and Backgammon, to GFOS: AmigaOS
+3.2 with GFOpenUp, 68040/68060. Each game runs in its own 80 x 24 console
 window: no SDL, no ACGame and no GFOpenGPU. It ships as a release archive
 with an Installer and as the GFOpenUp part Parts/BSDCardGames.
 
