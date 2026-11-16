@@ -1,0 +1,14 @@
+{
+  "name": "BSD Card Games",
+  "version": "2.17-gfos1",
+  "drawer": "BSDCardGames",
+  "program": "Cribbage",
+  "cpu": "68040",
+  "fpu": false,
+  "space": 400000,
+  "modules": [],
+  "parent": "Work:Games",
+  "badge": "icons/art/cribbage.png",
+  "keep": ["Cribbage.log"],
+  "script": "Install-BSDCardGames"
+}

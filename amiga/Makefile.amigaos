@@ -1,0 +1,139 @@
+# The BSD card games for GFOS (AmigaOS 3.2 with GFOpenUp), 68040/68060:
+# Cribbage, Mille Bornes, Go Fish and Backgammon (with Teachgammon, its
+# lessons) from bsd-games 2.17, each in its own 80 x 24 console window, built soft float (the stove's fpuauto uses the FPU
+# when the Amiga has one). No SDL, no GFOpenGPU.
+#
+#   make -f amiga/Makefile.amigaos -j4 BSD=/path/to/bsd-games [STOVE=...]
+#
+# BSD is upstream at the commit package/bsdgames.lock names, with
+# amiga/patches applied (package/build-amiga.sh does both). STOVE is a
+# GFOpenAmigaGCC 16.2.0-open6 stove (prefix/ has the compiler and the NDK).
+# Cribbage and Mille Bornes draw through amiga/curses.c (the part of curses
+# they use, sent to the console as ANSI); Backgammon draws through
+# amiga/termcap.c (the console's ANSI) and sets tty modes (amiga/tty.c);
+# amiga/console_amiga.c opens the window and reads the keys; amiga/include/amiga_prelude.h and
+# amiga/compat*.c answer what NetBSD has and libnix has not.
+#
+# Output: build/amigaos/BSDCardGames/ (the drawer: Cribbage, MilleBornes,
+# GoFish, Backgammon, Teachgammon, Data/ with the instructions, ReadMe (Cribbage keeps its log,
+# Cribbage.log, beside itself),
+# the licence, GlowIcons), build/amigaos/BSDCardGames.info and
+# Install-BSDCardGames beside them.
+
+BSD     ?= ../bsd-games
+STOVE   ?= $(HOME)/AmiCradle/stoves/os32-gcc16-open6
+PREFIX  ?= $(STOVE)/prefix
+CC      = $(PREFIX)/bin/m68k-amigaos-gcc
+CPU     ?= -m68040 -msoft-float
+# -fno-tree-loop-distribute-patterns: GCC 16's loop miscompile.
+OPT     ?= -Os -fomit-frame-pointer -fno-tree-loop-distribute-patterns
+
+# The games are 1990s BSD C (old-style definitions): gnu89 and -fpermissive,
+# and their warnings are upstream's (-w).
+DEFS    = -D__amigaos__ -include amiga/include/amiga_prelude.h
+CFLAGS  = -noixemul $(OPT) $(CPU) -std=gnu89 -fpermissive $(DEFS) -Iamiga/include -Iamiga
+MYFLAGS = -noixemul $(OPT) $(CPU) -std=gnu99 -Wall -Iamiga/include -Iamiga
+LDFLAGS = -noixemul $(CPU)
+
+BUILD   = build/amigaos
+OBJ     = $(BUILD)/obj
+OUT     = $(BUILD)/BSDCardGames
+
+CRIBBAGE = cards crib extern instr io score support
+MILLE    = comp end extern init mille misc move print roll save types varpush
+PORT     = curses keys compat compat_amiga
+BGCOMMON = allow board check fancy init odds one save subs table
+BGGAME   = extra main move text version
+BGTEACH  = data teach ttext1 ttext2 tutor
+# Backgammon's reads and writes, alarm and execl go through the port
+# (amiga/include/amiga_prelude.h); the two programs start each other
+BGFLAGS  = -DAMIGA_TTY_GAME -DV7 -I$(BSD)/backgammon/common_source \
+           -DEXEC_PATH='"PROGDIR:Backgammon"' -DTEACH_PATH='"PROGDIR:Teachgammon"'
+
+all: $(OUT)/Cribbage $(OUT)/MilleBornes $(OUT)/GoFish $(OUT)/Backgammon $(OUT)/Teachgammon package
+
+$(OBJ)/cribbage/%.o: $(BSD)/cribbage/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iamiga/cribbage -I$(BSD)/cribbage -w -c -o $@ $<
+
+$(OBJ)/mille/%.o: $(BSD)/mille/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(BSD)/mille -w -c -o $@ $<
+
+# Go Fish and Backgammon are not curses: amiga/game_start.c opens the
+# window, then runs upstream's main (renamed GAME_MAIN)
+$(OBJ)/fish/fish.o: $(BSD)/fish/fish.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iamiga/fish -Dmain=fish_main -w -c -o $@ $<
+
+$(OBJ)/bgcommon/%.o: $(BSD)/backgammon/common_source/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(BGFLAGS) -w -c -o $@ $<
+
+$(OBJ)/bg/%.o: $(BSD)/backgammon/backgammon/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(BGFLAGS) -Dmain=bg_main -w -c -o $@ $<
+
+$(OBJ)/teach/%.o: $(BSD)/backgammon/teachgammon/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(BGFLAGS) -Dmain=teach_main -w -c -o $@ $<
+
+START_GoFish      = fish_main
+START_Backgammon  = bg_main
+START_Teachgammon = teach_main
+$(OBJ)/port/start-%.o: amiga/game_start.c
+	@mkdir -p $(dir $@)
+	$(CC) $(MYFLAGS) -DGAME_MAIN=$(START_$*) -DGAME_TITLE='"$(or $(TITLE_$*),$*)"' -c -o $@ $<
+
+$(OBJ)/port/%.o: amiga/%.c $(wildcard amiga/*.h amiga/include/*.h)
+	@mkdir -p $(dir $@)
+	$(CC) $(MYFLAGS) -c -o $@ $<
+
+# the console glue once a game, for its window's title
+TITLE_MilleBornes = Mille Bornes
+TITLE_GoFish      = Go Fish
+$(OBJ)/port/console-%.o: amiga/console_amiga.c amiga/keys.h
+	@mkdir -p $(dir $@)
+	$(CC) $(MYFLAGS) -DAMIGA_GAME_TITLE='"$(or $(TITLE_$*),$*)"' -c -o $@ $<
+
+PORTOBJS = $(PORT:%=$(OBJ)/port/%.o)
+
+$(OUT)/Cribbage: $(CRIBBAGE:%=$(OBJ)/cribbage/%.o) $(PORTOBJS) $(OBJ)/port/console-Cribbage.o
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+$(OUT)/MilleBornes: $(MILLE:%=$(OBJ)/mille/%.o) $(PORTOBJS) $(OBJ)/port/console-MilleBornes.o
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+$(OUT)/GoFish: $(OBJ)/fish/fish.o $(OBJ)/port/start-GoFish.o $(PORTOBJS) $(OBJ)/port/console-GoFish.o
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+TTYOBJS = $(OBJ)/port/tty.o $(OBJ)/port/termcap.o $(OBJ)/port/exec_amiga.o
+
+$(OUT)/Backgammon: $(BGGAME:%=$(OBJ)/bg/%.o) $(BGCOMMON:%=$(OBJ)/bgcommon/%.o) $(OBJ)/port/start-Backgammon.o \
+		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/console-Backgammon.o
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+$(OUT)/Teachgammon: $(BGTEACH:%=$(OBJ)/teach/%.o) $(BGCOMMON:%=$(OBJ)/bgcommon/%.o) $(OBJ)/port/start-Teachgammon.o \
+		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/ospeed.o $(OBJ)/port/console-Teachgammon.o
+	@mkdir -p $(OUT)
+	$(CC) $(LDFLAGS) -o $@ $^
+
+package: $(OUT)/Cribbage $(OUT)/MilleBornes $(OUT)/GoFish $(OUT)/Backgammon $(OUT)/Teachgammon AMIGA_PORT.md
+	mkdir -p $(OUT)/Data
+	cp $(BSD)/cribbage/cribbage.n $(OUT)/Data/cribbage.n
+	cp $(BSD)/fish/fish.instr $(OUT)/Data/fish.instr
+	cp AMIGA_PORT.md $(OUT)/ReadMe
+	cp $(BSD)/COPYING $(OUT)/COPYING.txt
+	for f in Cribbage MilleBornes GoFish Backgammon Teachgammon ReadMe; do cp amiga/icons/$$f.info $(OUT)/; done
+	cp amiga/icons/ReadMe.info $(OUT)/COPYING.txt.info
+	cp amiga/icons/BSDCardGames-drawer.info $(BUILD)/BSDCardGames.info
+	cp amiga/Install-BSDCardGames amiga/Install-BSDCardGames.info $(BUILD)/
+
+clean:
+	rm -rf $(BUILD)
+
+.PHONY: all package clean

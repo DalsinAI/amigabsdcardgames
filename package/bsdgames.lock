@@ -1,0 +1,6 @@
+# Upstream: bsd-games 2.17 (NetBSD's games for Linux), at this commit of a
+# public mirror; package/build-amiga.sh fetches it, never kept here.
+BSD_URL=https://github.com/vattam/BSDGames
+BSD_COMMIT=56b8944332186891cd5c0094bd3991e3c5f5a799
+BSD_VERSION=2.17
+PORT_VERSION=2.17-gfos1
