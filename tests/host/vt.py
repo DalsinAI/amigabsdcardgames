@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Read what amiga/curses.c sent (ANSI: CSI row;col H, CSI J, CSI K, SGR
+0/7, CR, LF, BS, text) and print the 24 x 80 screen it leaves, or check it:
+    vt.py OUTPUT [--want TEXT ...] [--standout TEXT]
+Exits 1 when a wanted text is not on the screen.
+Copyright (c) 2026 AmiCradle Team. BSD-3-Clause, like the games."""
+import re, sys
+
+def screen(data, rows=24, cols=80):
+    s = [[" "] * cols for _ in range(rows)]
+    so = [[False] * cols for _ in range(rows)]
+    y = x = 0
+    inv = False
+    i = 0
+    while i < len(data):
+        c = data[i]
+        if c == "\033" and i + 1 < len(data) and data[i + 1] == "[":
+            m = re.match(r"\033\[([0-9;]*)([A-Za-z])", data[i:])
+            if not m:
+                i += 1; continue
+            args, cmd = m.group(1), m.group(2)
+            nums = [int(a) if a else 0 for a in args.split(";")] if args else []
+            if cmd == "H":
+                y = (nums[0] if nums and nums[0] else 1) - 1
+                x = (nums[1] if len(nums) > 1 and nums[1] else 1) - 1
+            elif cmd == "J":
+                for r in range(rows):
+                    for k in range(cols):
+                        if r > y or (r == y and k >= x) or (nums and nums[0] == 2):
+                            s[r][k] = " "; so[r][k] = False
+            elif cmd == "K":
+                for k in range(x, cols):
+                    s[y][k] = " "; so[y][k] = False
+            elif cmd == "m":
+                inv = 7 in nums
+            i += m.end(); continue
+        if c == "\r": x = 0
+        elif c == "\n":
+            y = min(y + 1, rows - 1)
+        elif c == "\b": x = max(0, x - 1)
+        elif c == "\a": pass
+        elif c >= " ":
+            if 0 <= y < rows and 0 <= x < cols:
+                s[y][x] = c; so[y][x] = inv
+            x += 1
+            if x >= cols: x = 0; y = min(y + 1, rows - 1)
+        i += 1
+    return ["".join(r).rstrip() for r in s], so
+
+if __name__ == "__main__":
+    data = open(sys.argv[1], encoding="latin-1").read()
+    lines, so = screen(data)
+    args = sys.argv[2:]
+    if not args:
+        print("\n".join(lines)); sys.exit(0)
+    text = "\n".join(lines)
+    bad = 0
+    while args:
+        opt, val = args[0], args[1]; args = args[2:]
+        if opt == "--want" and val not in text:
+            print(f"missing on the screen: {val!r}"); bad = 1
+    if bad:
+        print("\n".join(lines))
+    sys.exit(bad)

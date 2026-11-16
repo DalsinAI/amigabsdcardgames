@@ -1,0 +1,94 @@
+Cribbage, Mille Bornes, Go Fish on the Amiga: the instructions through the port's own pager (no fork, no sh), the keys through acurses_read (Return as NL, the cursor keys dropped), and no close-on-exec for the score log (nothing is exec'd).
+
+diff --git a/cribbage/crib.c b/cribbage/crib.c
+index 5fc53b3..3a1c1e0 100644
+--- a/cribbage/crib.c
++++ b/cribbage/crib.c
+@@ -79,6 +79,7 @@ main(argc, argv)
+ 	setregid(getgid(), getgid());
+ 
+ 	/* Set close-on-exec flag on log file */
++#ifndef __amigaos__	/* nothing is exec'd on the Amiga */
+ 	if (f != NULL) {
+ 		fd = fileno(f);
+ 		flags = fcntl(fd, F_GETFD);
+@@ -88,6 +89,7 @@ main(argc, argv)
+ 		if (fcntl(fd, F_SETFD, flags) == -1)
+ 			err(1, "fcntl F_SETFD");
+ 	}
++#endif
+ 
+ 	while ((ch = getopt(argc, argv, "eqr")) != -1)
+ 		switch (ch) {
+diff --git a/cribbage/instr.c b/cribbage/instr.c
+index f4d9d80..f987056 100644
+--- a/cribbage/instr.c
++++ b/cribbage/instr.c
+@@ -63,6 +63,11 @@ instructions()
+ 	pid_t pid;
+ 	const char *path;
+ 
++#ifdef __amigaos__	/* no fork or sh: the port's own pager (amiga/compat.c) */
++	(void)pstat; (void)fd; (void)pid; (void)path;
++	if (amiga_page(_PATH_INSTR))
++		exit(1);
++#else
+ 	switch (pid = vfork()) {
+ 	case -1:
+ 		err(1, "vfork");
+@@ -95,4 +100,5 @@ instructions()
+ 		if (pid == -1 || WEXITSTATUS(pstat))
+ 			exit(1);
+ 	}
++#endif
+ }
+diff --git a/cribbage/io.c b/cribbage/io.c
+index 3d69257..d0f4987 100644
+--- a/cribbage/io.c
++++ b/cribbage/io.c
+@@ -512,7 +512,7 @@ readchar()
+ 
+ over:
+ 	cnt = 0;
+-	while (read(STDIN_FILENO, &c, sizeof(char)) <= 0)
++	while (acurses_read(STDIN_FILENO, &c, sizeof(char)) <= 0)
+ 		if (cnt++ > 100) {	/* if we are getting infinite EOFs */
+ 			bye();		/* quit the game */
+ 			exit(1);
+diff --git a/fish/fish.c b/fish/fish.c
+index ddb78fb..fc5a0c6 100644
+--- a/fish/fish.c
++++ b/fish/fish.c
+@@ -460,6 +460,11 @@ instructions()
+ 	if (input != 'y')
+ 		return;
+ 
++#ifdef __amigaos__	/* no fork or sh: the port's own pager (amiga/compat.c) */
++	(void)pid; (void)fd; (void)pager; (void)status;
++	if (amiga_page(_PATH_INSTR))
++		err(1, "open %s", _PATH_INSTR);
++#else
+ 	switch (pid = fork()) {
+ 	case 0: /* child */
+ 		if (!isatty(1))
+@@ -482,6 +487,7 @@ instructions()
+ 		(void)waitpid(pid, &status, 0);
+ 		break;
+ 	}
++#endif
+ 	(void)printf("Hit return to continue...\n");
+ 	while ((input = getchar()) != EOF && input != '\n');
+ }
+diff --git a/mille/misc.c b/mille/misc.c
+index f3cb788..3488bcf 100644
+--- a/mille/misc.c
++++ b/mille/misc.c
+@@ -253,7 +253,7 @@ readch()
+ 	int	cnt;
+ 	static char	c;
+ 
+-	for (cnt = 0; read(0, &c, 1) <= 0; cnt++)
++	for (cnt = 0; acurses_read(0, &c, 1) <= 0; cnt++)
+ 		if (cnt > 100)
+ 			exit(1);
+ 	return c;
