@@ -1,8 +1,8 @@
 #!/bin/sh
-# Host tests of the port's console layer, on this machine: amiga/curses.c,
+# Host tests of the port's console layer, on this machine: GFOpenCurses,
 # amiga/keys.c and amiga/compat.c built with the three games (upstream with
-# amiga/patches applied) over a plain terminal (tests/host/console_host.c),
-# run with scripted keys; tests/host/vt.py reads back the screen curses
+# amiga/patches applied) over a plain terminal (GFOpenCurses' src/console_host.c),
+# run with scripted keys; GFOpenCurses' tests/host/vt.py reads back the screen curses
 # drew and checks it:
 #  - keys: CR is NL, Esc [ A (a cursor key) and CSI sequences are dropped,
 #    Esc alone stays Esc;
@@ -24,6 +24,8 @@ set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$HERE/../.." && pwd)
 BSD=${BSD:?BSD=upstream source}
+GC=${GFOPENCURSES:?GFOPENCURSES=gfopencurses checkout}
+VT=$GC/tests/host/vt.py
 CC=${HOSTCC:-cc}
 command -v "$CC" >/dev/null 2>&1 || { echo "host tests: skipped (no C compiler)"; exit 0; }
 T=$(mktemp -d "${TMPDIR:-/tmp}/bsd-host.XXXXXX")
@@ -31,13 +33,15 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/bsd-host.XXXXXX")
 cd "$ROOT"
 
 PERM=$($CC -fpermissive -x c -E /dev/null >/dev/null 2>&1 && echo -fpermissive || true)
-UP="-std=gnu89 $PERM -w -D_XOPEN_SOURCE=500 -D__amigaos__ -include amiga/include/amiga_prelude.h -Iamiga/include -Iamiga"
-MINE="-std=gnu99 -Wall -Werror -D_XOPEN_SOURCE=600 -Iamiga/include -Iamiga"
-for f in curses keys compat; do $CC $MINE -c -o "$T/$f.o" "amiga/$f.c"; done
+UP="-std=gnu89 $PERM -w -D_XOPEN_SOURCE=500 -D__amigaos__ -include amiga/include/amiga_prelude.h -I$GC/include -Iamiga/include -Iamiga"
+MINE="-std=gnu99 -Wall -Werror -D_XOPEN_SOURCE=600 -I$GC/include -Iamiga/include -Iamiga"
+for f in curses keys; do $CC $MINE -c -o "$T/$f.o" "$GC/src/$f.c"; done
+$CC $MINE -c -o "$T/compat.o" amiga/compat.c
 $CC $MINE -DGAME_MAIN=fish_main -DGAME_TITLE='"Go Fish"' -c -o "$T/start_fish.o" amiga/game_start.c
 $CC $MINE -DGAME_MAIN=bg_main -DGAME_TITLE='"Backgammon"' -c -o "$T/start_bg.o" amiga/game_start.c
 $CC $MINE -DGAME_MAIN=teach_main -DGAME_TITLE='"Teachgammon"' -c -o "$T/start_teach.o" amiga/game_start.c
-$CC $MINE -c -o "$T/con.o" tests/host/console_host.c
+$CC $MINE -c -o "$T/con.o" "$GC/src/console_host.c"
+$CC $MINE -D_DEFAULT_SOURCE -c -o "$T/exec.o" tests/host/exec_host.c
 for f in tty termcap ospeed; do $CC $MINE -D_DEFAULT_SOURCE -c -o "$T/$f.o" "amiga/$f.c"; done
 PORT="$T/curses.o $T/keys.o $T/compat.o $T/con.o"
 # the games' files where the host run finds them (on the Amiga: PROGDIR:)
@@ -68,7 +72,7 @@ $CC -o "$T/cribbage" "$T"/c_*.o $PORT
 $CC -o "$T/mille" "$T"/m_*.o $PORT
 # shellcheck disable=SC2086
 $CC -o "$T/fish" "$T/fish.o" "$T/start_fish.o" $PORT
-TTY="$T/tty.o $T/termcap.o"
+TTY="$T/tty.o $T/termcap.o $T/exec.o"
 # shellcheck disable=SC2086
 $CC -o "$T/backgammon" "$T"/bg_*.o "$T"/bc_*.o "$T/start_bg.o" $PORT $TTY
 # shellcheck disable=SC2086
@@ -77,7 +81,7 @@ $CC -o "$T/teachgammon" "$T"/bt_*.o "$T"/bc_*.o "$T/start_teach.o" "$T/ospeed.o"
 # the keys, through amiga/keys.c alone
 cat > "$T/keys_test.c" <<'C'
 #include <stdio.h>
-#include "keys.h"
+#include "gfopencurses_keys.h"
 static const unsigned char *p; static int n;
 static int next(void) { return n-- > 0 ? *p++ : -1; }
 int main(void)
@@ -104,7 +108,7 @@ want() {	# name, output, texts...
     n=$#
     for t in "$@"; do set -- "$@" --want "$t"; done
     shift "$n"
-    if python3 "$HERE/vt.py" "$out" "$@" > "$T/vt.txt"; then
+    if python3 "$VT" "$out" "$@" > "$T/vt.txt"; then
         echo "ok   $name"
     else
         echo "FAIL $name"; cat "$T/vt.txt"; fails=$((fails + 1))
