@@ -8,10 +8,12 @@
 # BSD is upstream at the commit package/bsdgames.lock names, with
 # amiga/patches applied (package/build-amiga.sh does both). STOVE is a
 # GFOpenAmigaGCC 16.2.0-open6 stove (prefix/ has the compiler and the NDK).
-# Cribbage and Mille Bornes draw through amiga/curses.c (the part of curses
-# they use, sent to the console as ANSI); Backgammon draws through
+# Cribbage and Mille Bornes draw through GFOpenCurses (DalsinAI/gfopencurses,
+# at the commit package/gfopencurses.lock names, built first: GFOPENCURSES
+# is its checkout), sent to the console as ANSI; Backgammon draws through
 # amiga/termcap.c (the console's ANSI) and sets tty modes (amiga/tty.c);
-# amiga/console_amiga.c opens the window and reads the keys; amiga/include/amiga_prelude.h and
+# GFOpenCurses opens each game's window (amiga/title.c titles it) and
+# reads the keys; amiga/include/amiga_prelude.h and
 # amiga/compat*.c answer what NetBSD has and libnix has not.
 #
 # Output: build/amigaos/BSDCardGames/ (the drawer: Cribbage, MilleBornes,
@@ -21,6 +23,7 @@
 # Install-BSDCardGames beside them.
 
 BSD     ?= ../bsd-games
+GFOPENCURSES ?= ../gfopencurses
 STOVE   ?= $(HOME)/AmiCradle/stoves/os32-gcc16-open6
 PREFIX  ?= $(STOVE)/prefix
 CC      = $(PREFIX)/bin/m68k-amigaos-gcc
@@ -31,8 +34,8 @@ OPT     ?= -Os -fomit-frame-pointer -fno-tree-loop-distribute-patterns
 # The games are 1990s BSD C (old-style definitions): gnu89 and -fpermissive,
 # and their warnings are upstream's (-w).
 DEFS    = -D__amigaos__ -include amiga/include/amiga_prelude.h
-CFLAGS  = -noixemul $(OPT) $(CPU) -std=gnu89 -fpermissive $(DEFS) -Iamiga/include -Iamiga
-MYFLAGS = -noixemul $(OPT) $(CPU) -std=gnu99 -Wall -Iamiga/include -Iamiga
+CFLAGS  = -noixemul $(OPT) $(CPU) -std=gnu89 -fpermissive $(DEFS) -I$(GFOPENCURSES)/include -Iamiga/include -Iamiga
+MYFLAGS = -noixemul $(OPT) $(CPU) -std=gnu99 -Wall -I$(GFOPENCURSES)/include -Iamiga/include -Iamiga
 LDFLAGS = -noixemul $(CPU)
 
 BUILD   = build/amigaos
@@ -41,7 +44,7 @@ OUT     = $(BUILD)/BSDCardGames
 
 CRIBBAGE = cards crib extern instr io score support
 MILLE    = comp end extern init mille misc move print roll save types varpush
-PORT     = curses keys compat compat_amiga
+PORT     = compat compat_amiga
 BGCOMMON = allow board check fancy init odds one save subs table
 BGGAME   = extra main move text version
 BGTEACH  = data teach ttext1 ttext2 tutor
@@ -85,42 +88,44 @@ $(OBJ)/port/start-%.o: amiga/game_start.c
 	@mkdir -p $(dir $@)
 	$(CC) $(MYFLAGS) -DGAME_MAIN=$(START_$*) -DGAME_TITLE='"$(or $(TITLE_$*),$*)"' -c -o $@ $<
 
-$(OBJ)/port/%.o: amiga/%.c $(wildcard amiga/*.h amiga/include/*.h)
+$(OBJ)/port/%.o: amiga/%.c $(wildcard amiga/include/*.h)
 	@mkdir -p $(dir $@)
 	$(CC) $(MYFLAGS) -c -o $@ $<
 
-# the console glue once a game, for its window's title
+# the window's title once a game
 TITLE_MilleBornes = Mille Bornes
 TITLE_GoFish      = Go Fish
-$(OBJ)/port/console-%.o: amiga/console_amiga.c amiga/keys.h
+$(OBJ)/port/title-%.o: amiga/title.c
 	@mkdir -p $(dir $@)
-	$(CC) $(MYFLAGS) -DAMIGA_GAME_TITLE='"$(or $(TITLE_$*),$*)"' -c -o $@ $<
+	$(CC) $(MYFLAGS) -DGAME_TITLE='"$(or $(TITLE_$*),$*)"' -c -o $@ $<
+
+CURSESLIB = -L$(GFOPENCURSES)/lib -lgfopencurses
 
 PORTOBJS = $(PORT:%=$(OBJ)/port/%.o)
 
-$(OUT)/Cribbage: $(CRIBBAGE:%=$(OBJ)/cribbage/%.o) $(PORTOBJS) $(OBJ)/port/console-Cribbage.o
+$(OUT)/Cribbage: $(CRIBBAGE:%=$(OBJ)/cribbage/%.o) $(PORTOBJS) $(OBJ)/port/title-Cribbage.o
 	@mkdir -p $(OUT)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURSESLIB)
 
-$(OUT)/MilleBornes: $(MILLE:%=$(OBJ)/mille/%.o) $(PORTOBJS) $(OBJ)/port/console-MilleBornes.o
+$(OUT)/MilleBornes: $(MILLE:%=$(OBJ)/mille/%.o) $(PORTOBJS) $(OBJ)/port/title-MilleBornes.o
 	@mkdir -p $(OUT)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURSESLIB)
 
-$(OUT)/GoFish: $(OBJ)/fish/fish.o $(OBJ)/port/start-GoFish.o $(PORTOBJS) $(OBJ)/port/console-GoFish.o
+$(OUT)/GoFish: $(OBJ)/fish/fish.o $(OBJ)/port/start-GoFish.o $(PORTOBJS) $(OBJ)/port/title-GoFish.o
 	@mkdir -p $(OUT)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURSESLIB)
 
 TTYOBJS = $(OBJ)/port/tty.o $(OBJ)/port/termcap.o $(OBJ)/port/exec_amiga.o
 
 $(OUT)/Backgammon: $(BGGAME:%=$(OBJ)/bg/%.o) $(BGCOMMON:%=$(OBJ)/bgcommon/%.o) $(OBJ)/port/start-Backgammon.o \
-		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/console-Backgammon.o
+		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/title-Backgammon.o
 	@mkdir -p $(OUT)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURSESLIB)
 
 $(OUT)/Teachgammon: $(BGTEACH:%=$(OBJ)/teach/%.o) $(BGCOMMON:%=$(OBJ)/bgcommon/%.o) $(OBJ)/port/start-Teachgammon.o \
-		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/ospeed.o $(OBJ)/port/console-Teachgammon.o
+		$(PORTOBJS) $(TTYOBJS) $(OBJ)/port/ospeed.o $(OBJ)/port/title-Teachgammon.o
 	@mkdir -p $(OUT)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ $(CURSESLIB)
 
 package: $(OUT)/Cribbage $(OUT)/MilleBornes $(OUT)/GoFish $(OUT)/Backgammon $(OUT)/Teachgammon AMIGA_PORT.md
 	mkdir -p $(OUT)/Data

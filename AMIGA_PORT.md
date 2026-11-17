@@ -33,12 +33,13 @@ starts Backgammon again when the lessons end.
 
 How it was ported
 -----------------
-The games are built from upstream as they are. amiga/curses.c is the part
-of curses Cribbage and Mille Bornes use: their windows are kept in memory
+The games are built from upstream as they are. Cribbage and Mille Bornes
+use GFOpenCurses (DalsinAI/gfopencurses, the curses our console ports
+share): their windows are kept in memory
 and a refresh sends the console only what changed, as ANSI sequences,
-which console.device reads. amiga/console_amiga.c opens the window, puts
-it in raw mode for the curses games and decodes the keys (amiga/keys.c:
-Return as NL, cursor keys dropped). Backgammon draws with
+which console.device reads. GFOpenCurses also opens each game's window
+(amiga/title.c titles it), puts it in raw mode for the curses games and
+decodes the keys (Return as NL). Backgammon draws with
 termcap and sets tty modes: amiga/termcap.c is one termcap entry, the
 console window's ANSI, and amiga/tty.c makes its modes the window's (a key
 at a time is raw mode; its LF-only output is the console's CSI 20 l).
